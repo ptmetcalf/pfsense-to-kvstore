@@ -109,6 +109,31 @@ def build_kv_client() -> Tuple[SplunkKV, int]:
     )
 
 
+def sync_collection(
+    kv: SplunkKV,
+    collection: str,
+    rows: List[Dict[str, str]],
+    key_fn: Callable[[Dict[str, str]], str],
+    chunk_size: int,
+    remove_stale: bool,
+) -> None:
+    docs = add_keys(rows, key_fn)
+    print(f"Writing {len(docs)} docs to {collection}")
+    kv.batch_save(collection, docs, chunk_size=chunk_size)
+
+    if not remove_stale:
+        return
+
+    current_keys = {doc["_key"] for doc in docs}
+    existing_keys = kv.list_keys(collection)
+    stale_keys = sorted(existing_keys - current_keys)
+    if stale_keys:
+        print(f"Deleting {len(stale_keys)} stale docs from {collection}")
+        kv.delete_keys(collection, stale_keys)
+    else:
+        print(f"No stale docs to delete for {collection}")
+
+
 def run_once(
     mode: str,
     config_xml: Optional[str],
@@ -121,6 +146,7 @@ def run_once(
     known_hosts_file: Optional[str],
     kv: SplunkKV,
     chunk_size: int,
+    remove_stale: bool,
 ) -> None:
     root = load_config_xml(
         config_xml,
@@ -145,27 +171,47 @@ def run_once(
 
     if mode in ("dns", "all"):
         rows = build_dns_rows(root)
-        docs = add_keys(rows, lambda r: f"{r['ip']}|{r['hostname']}")
-        print(f"Writing {len(docs)} docs to pfsense_dns_hosts")
-        kv.batch_save("pfsense_dns_hosts", docs, chunk_size=chunk_size)
+        sync_collection(
+            kv,
+            "pfsense_dns_hosts",
+            rows,
+            lambda r: f"{r['ip']}|{r['hostname']}",
+            chunk_size,
+            remove_stale,
+        )
 
     if mode in ("interfaces", "all"):
         rows = build_interface_rows(root)
-        docs = add_keys(rows, lambda r: r["interface"])
-        print(f"Writing {len(docs)} docs to pfsense_interface_map")
-        kv.batch_save("pfsense_interface_map", docs, chunk_size=chunk_size)
+        sync_collection(
+            kv,
+            "pfsense_interface_map",
+            rows,
+            lambda r: r["interface"],
+            chunk_size,
+            remove_stale,
+        )
 
     if mode in ("rules", "all"):
         rows = build_rule_rows(root, pfctl_lines)
-        docs = add_keys(rows, lambda r: r["tracker_id"])
-        print(f"Writing {len(docs)} docs to pfsense_filter_rule_map")
-        kv.batch_save("pfsense_filter_rule_map", docs, chunk_size=chunk_size)
+        sync_collection(
+            kv,
+            "pfsense_filter_rule_map",
+            rows,
+            lambda r: r["tracker_id"],
+            chunk_size,
+            remove_stale,
+        )
 
     if mode in ("enrichment", "all"):
         rows = parse_enrichment_interfaces(root)
-        docs = add_keys(rows, lambda r: r["cidr"])
-        print(f"Writing {len(docs)} docs to pfsense_zone_subnets")
-        kv.batch_save("pfsense_zone_subnets", docs, chunk_size=chunk_size)
+        sync_collection(
+            kv,
+            "pfsense_zone_subnets",
+            rows,
+            lambda r: r["cidr"],
+            chunk_size,
+            remove_stale,
+        )
 
 
 def main() -> None:
@@ -186,6 +232,7 @@ def main() -> None:
         "accept-new",
     )
     known_hosts_file = os.environ.get("PFSENSE_SSH_KNOWN_HOSTS")
+    remove_stale = env_bool("SPLUNK_REMOVE_STALE", False)
 
     kv, chunk_size = build_kv_client()
 
@@ -202,6 +249,7 @@ def main() -> None:
             known_hosts_file,
             kv,
             chunk_size,
+            remove_stale,
         )
         if args.interval_seconds <= 0:
             break

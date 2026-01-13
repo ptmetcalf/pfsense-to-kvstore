@@ -37,3 +37,8 @@ docker run --rm \
 
 If you hit host key prompts or verification errors inside the container, set
 `PFSENSE_SSH_STRICT_HOST_KEY=accept-new` (default) or `no` in your `.env`.
+
+## Stale cleanup
+
+Set `SPLUNK_REMOVE_STALE=true` to delete KV records that are no longer present
+in the latest pfSense pull.
