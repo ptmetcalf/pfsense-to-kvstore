@@ -1,4 +1,5 @@
 import ipaddress
+import logging
 import re
 import subprocess
 import sys
@@ -71,6 +72,7 @@ class SshSession:
 
     def run(self, command: str) -> str:
         cmd = [*self.base_cmd, f"{self.user}@{self.host}", command]
+        logging.debug(f"Executing SSH command: {command}")
         try:
             result = subprocess.run(
                 cmd,
@@ -79,16 +81,19 @@ class SshSession:
                 stderr=subprocess.PIPE,
                 text=True,
             )
+            logging.debug(f"SSH command completed successfully")
+            return result.stdout
         except subprocess.CalledProcessError as exc:
             safe_cmd = [*self.safe_base_cmd, f"{self.user}@{self.host}", command]
             stderr = (exc.stderr or "").strip()
             stdout = (exc.stdout or "").strip()
             details = stderr or stdout or "No output captured."
+            logging.error(f"SSH command failed: {command}")
+            logging.error(f"Exit code: {exc.returncode}, Output: {details}")
             raise RuntimeError(
                 f"SSH command failed (exit {exc.returncode}). "
                 f"Command: {' '.join(safe_cmd)}; Output: {details}"
             ) from exc
-        return result.stdout
 
     def close(self) -> None:
         subprocess.run(
@@ -109,9 +114,11 @@ def load_config_xml(
     known_hosts_file: Optional[str] = None,
 ) -> ET.Element:
     if config_xml:
+        logging.debug(f"Loading config.xml from local file: {config_xml}")
         return ET.parse(config_xml).getroot()
     if not host:
         raise ValueError("Either PFSENSE_HOST or --config-xml is required.")
+    logging.debug(f"Connecting to pfSense via SSH: {user}@{host}:{port}")
     session = SshSession(
         host,
         user,
@@ -121,7 +128,9 @@ def load_config_xml(
         known_hosts_file=known_hosts_file,
     )
     try:
+        logging.debug("Retrieving /cf/conf/config.xml via SSH")
         xml_text = session.run("cat /cf/conf/config.xml")
+        logging.debug(f"Retrieved {len(xml_text)} bytes of config.xml")
     finally:
         session.close()
     return ET.fromstring(xml_text)
@@ -137,9 +146,12 @@ def load_pfctl_lines(
     known_hosts_file: Optional[str] = None,
 ) -> List[str]:
     if pfctl_file:
+        logging.debug(f"Loading pfctl output from local file: {pfctl_file}")
         return Path(pfctl_file).read_text(encoding="utf-8").splitlines()
     if not host:
+        logging.debug("No host specified, skipping pfctl retrieval")
         return []
+    logging.debug(f"Connecting to pfSense via SSH: {user}@{host}:{port}")
     session = SshSession(
         host,
         user,
@@ -150,11 +162,14 @@ def load_pfctl_lines(
     )
     try:
         try:
+            logging.debug("Executing 'pfctl -sr' via SSH")
             output = session.run("pfctl -sr")
-        except subprocess.CalledProcessError:
-            print("Warning: failed to run pfctl -sr; continuing with config.xml only.", file=sys.stderr)
+            lines = output.splitlines()
+            logging.debug(f"Retrieved {len(lines)} lines from pfctl -sr")
+            return lines
+        except (subprocess.CalledProcessError, RuntimeError) as exc:
+            logging.warning(f"Failed to run pfctl -sr: {exc}. Continuing with config.xml only.")
             return []
-        return output.splitlines()
     finally:
         session.close()
 
