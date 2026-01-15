@@ -2,7 +2,6 @@ import ipaddress
 import logging
 import re
 import subprocess
-import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 import xml.etree.ElementTree as ET
@@ -81,7 +80,7 @@ class SshSession:
                 stderr=subprocess.PIPE,
                 text=True,
             )
-            logging.debug(f"SSH command completed successfully")
+            logging.debug("SSH command completed successfully")
             return result.stdout
         except subprocess.CalledProcessError as exc:
             safe_cmd = [*self.safe_base_cmd, f"{self.user}@{self.host}", command]
