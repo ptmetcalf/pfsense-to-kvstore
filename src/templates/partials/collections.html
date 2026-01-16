@@ -1,0 +1,56 @@
+<div class="collection-data">
+    <div class="collection-header">
+        <h3>{{ collection }}</h3>
+        <p>Total: {{ total }} documents | Showing {{ data|length }} (offset: {{ offset }})</p>
+        <button class="btn btn-danger"
+                hx-post="/api/collections/{{ collection }}/wipe"
+                hx-confirm="Are you sure you want to delete ALL {{ total }} documents from {{ collection }}?"
+                hx-swap="none">
+            Wipe Collection
+        </button>
+    </div>
+
+    {% if data %}
+    <table class="collection-table">
+        <thead>
+            <tr>
+                {% for key in data[0].keys() %}
+                <th>{{ key }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for doc in data %}
+            <tr>
+                {% for value in doc.values() %}
+                <td>{{ value }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Pagination controls -->
+    <div class="pagination">
+        {% if offset > 0 %}
+        <button class="btn btn-secondary"
+                hx-get="/api/collections/{{ collection }}?limit={{ limit }}&offset={{ [0, offset - limit]|max }}"
+                hx-target="#collection-viewer"
+                hx-swap="innerHTML">
+            Previous
+        </button>
+        {% endif %}
+
+        {% if offset + limit < total %}
+        <button class="btn btn-secondary"
+                hx-get="/api/collections/{{ collection }}?limit={{ limit }}&offset={{ offset + limit }}"
+                hx-target="#collection-viewer"
+                hx-swap="innerHTML">
+            Next
+        </button>
+        {% endif %}
+    </div>
+    {% else %}
+    <p class="no-data">No documents in this collection</p>
+    {% endif %}
+</div>

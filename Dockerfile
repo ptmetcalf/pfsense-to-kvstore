@@ -12,4 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ ./src
 ENV PYTHONPATH=/app/src
 
-ENTRYPOINT ["python", "-m", "app"]
+# Expose web interface port
+EXPOSE 5000
+
+ENTRYPOINT ["python", "-m", "web_app"]

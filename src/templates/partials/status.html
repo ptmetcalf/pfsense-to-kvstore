@@ -1,0 +1,34 @@
+<div class="status-info status-{{ status.state }}">
+    <div class="status-item">
+        <span class="label">State:</span>
+        <span class="value">{{ status.state|upper }}</span>
+    </div>
+    {% if status.current_mode %}
+    <div class="status-item">
+        <span class="label">Current Mode:</span>
+        <span class="value">{{ status.current_mode }}</span>
+    </div>
+    {% endif %}
+    <div class="status-item">
+        <span class="label">Last Run:</span>
+        <span class="value">{{ status.last_run or "Never" }}</span>
+    </div>
+    {% if status.next_run %}
+    <div class="status-item">
+        <span class="label">Next Run:</span>
+        <span class="value">{{ status.next_run }}</span>
+    </div>
+    {% endif %}
+    {% if status.last_success %}
+    <div class="status-item">
+        <span class="label">Last Success:</span>
+        <span class="value">{{ status.last_success }}</span>
+    </div>
+    {% endif %}
+    {% if status.last_error %}
+    <div class="status-item error">
+        <span class="label">Last Error:</span>
+        <span class="value">{{ status.last_error }}</span>
+    </div>
+    {% endif %}
+</div>

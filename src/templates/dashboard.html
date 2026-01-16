@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard">
+    <!-- Status Card (auto-refresh every 2s) -->
+    <section class="card">
+        <h2>Sync Status</h2>
+        <div id="status-card"
+             hx-get="/partials/status"
+             hx-trigger="every 2s"
+             hx-swap="innerHTML">
+            Loading status...
+        </div>
+    </section>
+
+    <!-- Manual Sync Triggers -->
+    <section class="card">
+        <h2>Manual Sync</h2>
+        <div class="button-group">
+            <button class="btn btn-primary"
+                    hx-post="/api/trigger"
+                    hx-vals='{"mode": "all"}'
+                    hx-swap="none"
+                    hx-indicator=".htmx-indicator">
+                Sync All
+            </button>
+            <button class="btn btn-secondary"
+                    hx-post="/api/trigger"
+                    hx-vals='{"mode": "dns"}'
+                    hx-swap="none">
+                Sync DNS
+            </button>
+            <button class="btn btn-secondary"
+                    hx-post="/api/trigger"
+                    hx-vals='{"mode": "interfaces"}'
+                    hx-swap="none">
+                Sync Interfaces
+            </button>
+            <button class="btn btn-secondary"
+                    hx-post="/api/trigger"
+                    hx-vals='{"mode": "rules"}'
+                    hx-swap="none">
+                Sync Rules
+            </button>
+            <button class="btn btn-secondary"
+                    hx-post="/api/trigger"
+                    hx-vals='{"mode": "enrichment"}'
+                    hx-swap="none">
+                Sync Enrichment
+            </button>
+        </div>
+        <div class="htmx-indicator">Triggering sync...</div>
+    </section>
+
+    <!-- Recent Logs (auto-refresh) -->
+    <section class="card">
+        <h2>Recent Logs</h2>
+        <div id="logs-container"
+             hx-get="/partials/logs?limit=50"
+             hx-trigger="every 2s"
+             hx-swap="innerHTML">
+            Loading logs...
+        </div>
+    </section>
+
+    <!-- Sync History -->
+    <section class="card">
+        <h2>Sync History</h2>
+        <div id="history-container"
+             hx-get="/partials/history?limit=10"
+             hx-trigger="load, every 10s"
+             hx-swap="innerHTML">
+            Loading history...
+        </div>
+    </section>
+
+    <!-- KV Store Collections -->
+    <section class="card">
+        <h2>KV Store Collections</h2>
+        <div class="button-group">
+            <button class="btn btn-info"
+                    hx-get="/api/collections/pfsense_dns_hosts?limit=50&offset=0"
+                    hx-target="#collection-viewer"
+                    hx-swap="innerHTML">
+                View DNS Hosts
+            </button>
+            <button class="btn btn-info"
+                    hx-get="/api/collections/pfsense_interface_map?limit=50&offset=0"
+                    hx-target="#collection-viewer"
+                    hx-swap="innerHTML">
+                View Interfaces
+            </button>
+            <button class="btn btn-info"
+                    hx-get="/api/collections/pfsense_filter_rule_map?limit=50&offset=0"
+                    hx-target="#collection-viewer"
+                    hx-swap="innerHTML">
+                View Rules
+            </button>
+            <button class="btn btn-info"
+                    hx-get="/api/collections/pfsense_zone_subnets?limit=50&offset=0"
+                    hx-target="#collection-viewer"
+                    hx-swap="innerHTML">
+                View Subnets
+            </button>
+        </div>
+        <div id="collection-viewer" class="collection-viewer">
+            Select a collection to view data
+        </div>
+    </section>
+</div>
+{% endblock %}

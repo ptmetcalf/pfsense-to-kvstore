@@ -1,0 +1,26 @@
+<div class="logs-container">
+    {% if logs %}
+    <table class="logs-table">
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Level</th>
+                <th>Message</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr class="log-{{ log.level|lower }}">
+                <td class="timestamp">{{ log.timestamp }}</td>
+                <td class="level">
+                    <span class="badge badge-{{ log.level|lower }}">{{ log.level }}</span>
+                </td>
+                <td class="message">{{ log.message }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="no-data">No logs available</p>
+    {% endif %}
+</div>

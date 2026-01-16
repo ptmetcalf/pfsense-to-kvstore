@@ -162,3 +162,71 @@ class SplunkKV:
                 f"delete key {key} from {collection}",
                 _do_delete,
             )
+
+    def query_collection(self, collection: str, limit: int = 100, offset: int = 0) -> List[Dict]:
+        """Query collection with pagination. Returns list of documents."""
+        url = (
+            f"{self.base_url}/servicesNS/{self.owner}/{self.app}/"
+            f"storage/collections/data/{collection}"
+        )
+
+        def _do_get():
+            response = self.session.get(
+                url,
+                params={"limit": limit, "skip": offset, "output_mode": "json"},
+                verify=self.verify_tls,
+                timeout=self.timeout_s,
+            )
+            if not response.ok:
+                raise requests.exceptions.HTTPError(
+                    f"HTTP {response.status_code}: {response.text}",
+                    response=response,
+                )
+            try:
+                payload = response.json()
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(f"Invalid JSON response from {collection}") from exc
+
+            if isinstance(payload, list):
+                return payload
+            return []
+
+        return self._retry_request(f"query {collection} (limit={limit}, offset={offset})", _do_get)
+
+    def count_documents(self, collection: str) -> int:
+        """Get total document count in collection."""
+        url = (
+            f"{self.base_url}/servicesNS/{self.owner}/{self.app}/"
+            f"storage/collections/data/{collection}"
+        )
+
+        def _do_get():
+            response = self.session.get(
+                url,
+                params={"count": 0, "output_mode": "json"},
+                verify=self.verify_tls,
+                timeout=self.timeout_s,
+            )
+            if not response.ok:
+                raise requests.exceptions.HTTPError(
+                    f"HTTP {response.status_code}: {response.text}",
+                    response=response,
+                )
+            try:
+                payload = response.json()
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(f"Invalid JSON response from {collection}") from exc
+
+            # Response is a list, count is the length
+            if isinstance(payload, list):
+                return len(payload)
+            return 0
+
+        return self._retry_request(f"count documents in {collection}", _do_get)
+
+    def delete_all(self, collection: str) -> int:
+        """Delete all documents from collection. Returns count deleted."""
+        keys = self.list_keys(collection)
+        if keys:
+            self.delete_keys(collection, list(keys))
+        return len(keys)

@@ -30,6 +30,27 @@ This is a containerized Python application that extracts configuration data from
    - `batch_save()`: Bulk upsert documents in chunks (default 500)
    - `list_keys()`: Retrieve all _key values from a collection
    - `delete_keys()`: Remove stale records no longer present in pfSense
+   - `query_collection()`: Query collection with pagination
+   - `count_documents()`: Get total document count
+   - `delete_all()`: Wipe all documents from a collection
+
+4. **state_manager.py** - State persistence and logging (Web Interface)
+   - `StateManager` class: Manages sync state with SQLite + in-memory cache
+   - Tracks sync history, current status, and logs
+   - `StateLoggingHandler`: Custom logging handler to capture logs
+
+5. **sync_service.py** - Background sync scheduler (Web Interface)
+   - `SyncService` class: Manages background sync operations
+   - Daemon thread for scheduled syncs
+   - Manual sync triggers
+   - Thread-safe state management
+
+6. **web_app.py** - Flask web interface (Web Interface)
+   - Dashboard with real-time status updates
+   - Manual sync triggers for all modes
+   - Live log viewer
+   - KV store collection viewer with pagination
+   - Collection wipe operations
 
 ### Data Flow
 
@@ -82,11 +103,63 @@ docker run --rm \
   pfsense-kv-sync:latest --mode all
 ```
 
+### Run Web Interface
+Start the Flask web dashboard with background sync scheduler:
+```bash
+docker run -p 5000:5000 --env-file .env pfsense-kv-sync:latest python -m web_app
+```
+
+Access the dashboard at http://localhost:5000
+
+The web interface provides:
+- Real-time sync status (auto-refreshes every 2s)
+- Manual sync triggers for each mode
+- Live log viewer
+- Sync history
+- KV store collection viewer with pagination
+- Collection wipe operations
+
 ### Linting
 ```bash
 pip install ruff
 ruff check src
 ```
+
+## Web Interface
+
+The application includes a Flask-based web interface for monitoring and controlling sync operations.
+
+### Features
+
+- **Dashboard**: Real-time view of sync status, last run, next scheduled run
+- **Manual Triggers**: Buttons to trigger syncs for specific modes (dns, interfaces, rules, enrichment, all)
+- **Live Logs**: Auto-refreshing log viewer showing recent sync operations
+- **Sync History**: Table of past sync runs with success/failure status
+- **Collection Viewer**: Browse KV store data with pagination
+- **Collection Wipe**: Delete all documents from a collection (with confirmation)
+
+### Architecture
+
+The web interface runs alongside the sync process using:
+- **Flask**: Web server on port 5000
+- **HTMX**: Dynamic UI updates without JavaScript frameworks
+- **SQLite**: Persistent storage for sync history and logs
+- **Threading**: Background sync scheduler in daemon thread
+- **StateManager**: Thread-safe coordination between web UI and sync operations
+
+### Running Modes
+
+**Web Mode (Recommended):**
+```bash
+docker run -p 5000:5000 --env-file .env pfsense-kv-sync:latest python -m web_app --interval-seconds 3600
+```
+
+**CLI Mode (Original):**
+```bash
+docker run --env-file .env pfsense-kv-sync:latest --mode all --interval-seconds 3600
+```
+
+Both modes support the same configuration options via environment variables.
 
 ## Configuration
 
@@ -118,6 +191,12 @@ Configuration is via environment variables (see `.env.example`):
 - `--mode`: Select data types to sync (dns, interfaces, rules, enrichment, or all)
 - `--interval-seconds`: Continuous loop interval (0 = run once and exit)
 
+### Web Interface Configuration
+- `WEB_HOST`: Web server bind address (default: 0.0.0.0)
+- `WEB_PORT`: Web server port (default: 5000)
+- `WEB_DEBUG`: Enable Flask debug mode (default: false)
+- `SYNC_INTERVAL_SECONDS`: Background sync interval for web mode (default: 3600)
+
 ## Logging and Error Handling
 
 The application uses Python's standard logging module with timestamps and log levels:
@@ -144,7 +223,7 @@ The application uses Python's standard logging module with timestamps and log le
 ## Development Notes
 
 - Python 3.12 is the target version
-- The only runtime dependency is `requests==2.32.3`
+- Runtime dependencies: `requests==2.32.3`, `flask==3.0.0`
 - SSH connections use ControlMaster for connection reuse across multiple commands
 - All XML parsing uses `xml.etree.ElementTree`
 - Dockerfile uses python:3.12-slim with openssh-client and sshpass

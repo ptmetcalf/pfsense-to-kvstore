@@ -1,0 +1,45 @@
+<div class="history-container">
+    {% if history %}
+    <table class="history-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Mode</th>
+                <th>Started</th>
+                <th>Completed</th>
+                <th>Status</th>
+                <th>Collections</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sync in history %}
+            <tr class="sync-{{ 'success' if sync.success else 'error' if sync.success == false else 'pending' }}">
+                <td>{{ sync.id }}</td>
+                <td>{{ sync.mode }}</td>
+                <td>{{ sync.started_at }}</td>
+                <td>{{ sync.completed_at or "In Progress" }}</td>
+                <td>
+                    {% if sync.success == true %}
+                    <span class="badge badge-success">Success</span>
+                    {% elif sync.success == false %}
+                    <span class="badge badge-error">Failed</span>
+                    {% else %}
+                    <span class="badge badge-info">Running</span>
+                    {% endif %}
+                </td>
+                <td>{{ sync.collections|join(", ") if sync.collections else "-" }}</td>
+            </tr>
+            {% if sync.error_message %}
+            <tr class="error-details">
+                <td colspan="6">
+                    <strong>Error:</strong> {{ sync.error_message }}
+                </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="no-data">No sync history available</p>
+    {% endif %}
+</div>

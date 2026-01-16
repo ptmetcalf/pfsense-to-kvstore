@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import time
+from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple
 
 from pfsense_extract import (
@@ -20,6 +21,24 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
+
+
+@dataclass
+class SyncConfig:
+    """Configuration for a sync operation."""
+
+    mode: str
+    config_xml: Optional[str]
+    pfctl_file: Optional[str]
+    host: Optional[str]
+    user: str
+    port: int
+    password: Optional[str]
+    strict_host_key: str
+    known_hosts_file: Optional[str]
+    kv: SplunkKV
+    chunk_size: int
+    remove_stale: bool
 
 
 def add_keys(rows: List[Dict[str, str]], key_fn: Callable[[Dict[str, str]], str]) -> List[Dict[str, str]]:
@@ -128,6 +147,51 @@ def build_kv_client() -> Tuple[SplunkKV, int]:
             retry_delay=retry_delay,
         ),
         chunk_size,
+    )
+
+
+def get_sync_config(mode: Optional[str] = None, config_xml: Optional[str] = None, pfctl_file: Optional[str] = None) -> SyncConfig:
+    """Build sync configuration from environment variables and optional overrides."""
+    # Use environment defaults if not explicitly provided
+    if mode is None:
+        mode = os.environ.get("MODE", "all")
+    if config_xml is None:
+        config_xml = os.environ.get("PFSENSE_CONFIG_XML")
+    if pfctl_file is None:
+        pfctl_file = os.environ.get("PFSENSE_PFCTL_FILE")
+
+    # pfSense connection config
+    host = os.environ.get("PFSENSE_HOST")
+    if not config_xml and not host:
+        raise SystemExit("Set PFSENSE_HOST or PFSENSE_CONFIG_XML.")
+
+    user = os.environ.get("PFSENSE_USER", "admin")
+    port = env_int("PFSENSE_PORT", 22)
+    password = os.environ.get("PFSENSE_PASSWORD")
+    strict_host_key = env_choice(
+        "PFSENSE_SSH_STRICT_HOST_KEY",
+        ("yes", "no", "accept-new"),
+        "accept-new",
+    )
+    known_hosts_file = os.environ.get("PFSENSE_SSH_KNOWN_HOSTS")
+
+    # Splunk config
+    remove_stale = env_bool("SPLUNK_REMOVE_STALE", False)
+    kv, chunk_size = build_kv_client()
+
+    return SyncConfig(
+        mode=mode,
+        config_xml=config_xml,
+        pfctl_file=pfctl_file,
+        host=host,
+        user=user,
+        port=port,
+        password=password,
+        strict_host_key=strict_host_key,
+        known_hosts_file=known_hosts_file,
+        kv=kv,
+        chunk_size=chunk_size,
+        remove_stale=remove_stale,
     )
 
 
@@ -334,34 +398,15 @@ def main() -> None:
     logging.info("Starting pfSense to Splunk KV Store sync service")
 
     args = parse_args()
-    config_xml = args.config_xml
-    pfctl_file = args.pfctl_file
 
-    host = os.environ.get("PFSENSE_HOST")
-    if not config_xml and not host:
-        logging.error("Configuration error: Set PFSENSE_HOST or PFSENSE_CONFIG_XML")
-        raise SystemExit("Set PFSENSE_HOST or PFSENSE_CONFIG_XML.")
-
-    user = os.environ.get("PFSENSE_USER", "admin")
-    port = env_int("PFSENSE_PORT", 22)
-    password = os.environ.get("PFSENSE_PASSWORD")
-    strict_host_key = env_choice(
-        "PFSENSE_SSH_STRICT_HOST_KEY",
-        ("yes", "no", "accept-new"),
-        "accept-new",
-    )
-    known_hosts_file = os.environ.get("PFSENSE_SSH_KNOWN_HOSTS")
-    remove_stale = env_bool("SPLUNK_REMOVE_STALE", False)
-
-    logging.info(f"Configuration: mode={args.mode}, interval={args.interval_seconds}s, remove_stale={remove_stale}")
-
-    # Build Splunk KV client
+    # Build sync configuration
     try:
-        kv, chunk_size = build_kv_client()
+        config = get_sync_config(mode=args.mode, config_xml=args.config_xml, pfctl_file=args.pfctl_file)
         logging.info("Successfully initialized Splunk KV Store client")
+        logging.info(f"Configuration: mode={config.mode}, interval={args.interval_seconds}s, remove_stale={config.remove_stale}")
     except Exception as exc:
-        logging.error(f"Failed to initialize Splunk KV Store client: {exc}")
-        raise SystemExit(f"Failed to initialize Splunk client: {exc}")
+        logging.error(f"Failed to initialize configuration: {exc}")
+        raise SystemExit(f"Failed to initialize: {exc}")
 
     cycle = 0
     while True:
@@ -371,18 +416,18 @@ def main() -> None:
 
         try:
             success = run_once(
-                args.mode,
-                config_xml,
-                pfctl_file,
-                host,
-                user,
-                port,
-                password,
-                strict_host_key,
-                known_hosts_file,
-                kv,
-                chunk_size,
-                remove_stale,
+                config.mode,
+                config.config_xml,
+                config.pfctl_file,
+                config.host,
+                config.user,
+                config.port,
+                config.password,
+                config.strict_host_key,
+                config.known_hosts_file,
+                config.kv,
+                config.chunk_size,
+                config.remove_stale,
             )
 
             if not success:
